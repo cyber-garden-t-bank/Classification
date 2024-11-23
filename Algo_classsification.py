@@ -104,10 +104,7 @@ def classify_by_relative_amount(df, amount_column, percentiles=None, labels=None
     if labels is None:
         labels = ['Мелкие', 'Средние', 'Крупные']
 
-    # Вычисляем значения процентилей
     bounds = [df[amount_column].quantile(q) for q in percentiles]
     bins = [-float('inf')] + bounds + [float('inf')]
-
-    # Классификация
     df['amount_category'] = pd.cut(df[amount_column], bins=bins, labels=labels)
     return df
