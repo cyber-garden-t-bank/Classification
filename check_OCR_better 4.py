@@ -5,6 +5,13 @@ from transformers import T5TokenizerFast, AutoModelForSeq2SeqLM
 import os
 import torch
 import re
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel, pipeline
+from llama_cpp import Llama
+
+llm = Llama.from_pretrained(
+	repo_id="bartowski/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF",
+	filename="Llama-3.1-Nemotron-70B-Instruct-HF-IQ1_M.gguf",
+)
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -12,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Используемое устройство: {device}")
 
 model_name = 'UrukHan/t5-russian-spell'
-tokenizer = T5TokenizerFast.from_pretrained(model_name)
+tokenizer_spell = T5TokenizerFast.from_pretrained(model_name)
 model_spell = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
 
 reader_easyocr = easyocr.Reader(['ru'], gpu=torch.cuda.is_available())
@@ -89,11 +96,11 @@ def split_text_into_words(line_image):
 
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        if w > 10 and h > 10:  # Игнорируем мелкие шумы
+        if w > 10 and h > 10: 
             word_image = line_image[y:y+h, x:x+w]
             word_images.append((x, word_image))
 
-    word_images.sort(key=lambda x: x[0])  # Сортируем слова слева направо
+    word_images.sort(key=lambda x: x[0])  
     return [img for _, img in word_images]
 
 
@@ -116,8 +123,6 @@ def extract_and_save_words(image):
         line_texts = process_line_with_easyocr(line_image)
         if line_texts:
             all_words.extend(line_texts)
-        else:
-            # Если EasyOCR не распознал строку, пытаемся разделить её на слова
             word_images = split_text_into_words(line_image)
             for word_idx, word_image in enumerate(word_images):
                 word_results = reader_easyocr.readtext(word_image, detail=0, paragraph=False)
@@ -139,7 +144,7 @@ def correct_text(text):
 
     task_prefix = "Spell correct: "
     text_input = [task_prefix + text]
-    encoded = tokenizer(
+    encoded = tokenizer_spell(
         text_input,
         padding="longest",
         max_length=256,
@@ -152,14 +157,39 @@ def correct_text(text):
             input_ids=encoded['input_ids'],
             attention_mask=encoded['attention_mask']
         )
-    corrected = tokenizer.batch_decode(predicts, skip_special_tokens=True)[0]
+    corrected = tokenizer_spell.batch_decode(predicts, skip_special_tokens=True)[0]
 
-    # Если исправление сильно отличается, оставить исходный текст
     if len(corrected) > len(text) * 1.5 or len(corrected) < len(text) * 0.5:
         print(f"Слишком большое изменение текста. Оригинал: {text}, Исправлено: {corrected}")
         return text
 
     return corrected
+
+def extract_receipt_info(text_1, text_2):
+
+
+    prompt = f"""
+    Задача: Выделить из текста ключевую информацию о чеке. 
+
+    Шаблон результата:
+    - ИНН: [номер]
+    - Товары:
+      1. [название товара] - [цена за штуку] x [количество] = [итоговая цена]
+      2. ...
+    - Итоговая сумма: [сумма]
+
+    Текст чека:
+    {text_1}
+    Текст чека вариант 2:
+    {text_2}
+
+    Если есть ошибки в тексте, учитывайте, что это может быть связано с OCR-распознаванием. Попробуйте интерпретировать данные так, чтобы они соответствовали формату чека.
+    """
+
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+    outputs = model.generate(inputs.input_ids, max_new_tokens=500, do_sample=True, temperature=0.7)
+    result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return result.split("Текст чека:")[-1].strip()
 
 
 def main():
@@ -180,16 +210,16 @@ def main():
     if not detected_words:
         print("Не удалось распознать слова на изображении.")
         return
-
+    text_1 = ' '.join(detected_words)
     corrected_words = []
     for idx, word in enumerate(detected_words):
         corrected = correct_text(word)
         corrected_words.append(corrected)
         print(f"Слово {idx + 1} до коррекции: {word}, после коррекции: {corrected}")
-
+    text_2 = ' '.join(corrected_words)
+    print(text_1,"\n\n\n", text_2)
     print("\nРаспознанные данные:")
-    print(corrected_words)
-
+    print(extract_receipt_info(text_1, text_2))
 
 if __name__ == "__main__":
     main()
