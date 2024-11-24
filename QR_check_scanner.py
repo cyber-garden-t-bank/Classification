@@ -9,25 +9,27 @@ def parse_qr_to_json(qr_data):
     for pair in pairs:
         key, value = pair.split("=")
         result[key] = value
-    
-    decoded = {
-        "Дата и время покупки": datetime.strptime(result["t"], "%Y%m%dT%H%M%S").strftime("%d.%m.%Y %H:%M:%S"),
-        "Сумма": f"{result['s']} рублей",
-        "Фискальный накопитель": result["fn"],
-        "Номер фискального документа": result["i"],
-        "Фискальный признак документа": result["fp"],
-        "Тип операции": {
-            "1": "Покупка (приход)",
-            "2": "Возврат прихода",
-            "3": "Расход",
-            "4": "Возврат расхода"
-        }.get(result["n"], "Неизвестный тип операции")
-    }
+    try:
+        decoded = {
+            "Дата и время покупки": datetime.strptime(result["t"], "%Y%m%dT%H%M%S").strftime("%d.%m.%Y %H:%M:%S"),
+            "Сумма": f"{result['s']} рублей",
+            "Фискальный накопитель": result["fn"],
+            "Номер фискального документа": result["i"],
+            "Фискальный признак документа": result["fp"],
+            "Тип операции": {
+                "1": "Покупка (приход)",
+                "2": "Возврат прихода",
+                "3": "Расход",
+                "4": "Возврат расхода"
+            }.get(result["n"], "Неизвестный тип операции")
+        }
 
-    # Преобразуем в читаемый JSON
-    return json.dumps(decoded, ensure_ascii=False, indent=4)
-    json_data = json.dumps(result, ensure_ascii=False, indent=4)
-    return json_data
+        return json.dumps(decoded, ensure_ascii=False, indent=4)
+        json_data = json.dumps(result, ensure_ascii=False, indent=4)
+        return json_data
+    except Exception as e:
+        print(f"Ошибка при парсинге QR-кода: {e}")
+        return result
 
 def read_qr_code(image_path):
     
@@ -48,5 +50,5 @@ def read_qr_code(image_path):
 
 
 
-image_path = "check-subtotal-1.jpg"  
+image_path = "images/Chek-onlajn-kassy.jpg"  
 print(read_qr_code(image_path))

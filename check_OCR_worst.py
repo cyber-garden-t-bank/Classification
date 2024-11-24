@@ -163,7 +163,7 @@ def correct_text(text):
     return corrected
 
 def extract_receipt_info(text_1):
-    client = OpenAI(api_key="")
+    client = OpenAI()
 
     completion = client.chat.completions.create(
     model="gpt-4o-mini",
@@ -180,14 +180,12 @@ def extract_receipt_info(text_1):
     ]
     )
 
-    return completion.choices[0].message
+    return completion.choices[0].message.content
 
-def main():
+def get_transcription(image_path):
     """
     Основная функция для запуска пайплайна по извлечению и обработке текста.
     """
-    image_path = 'check-subtotal-1.jpg'
-    print(f"Загружаем изображение: {image_path}")
     
     try:
         preprocessed_image = preprocess_image(image_path)
@@ -200,18 +198,31 @@ def main():
     if not detected_words:
         print("Не удалось распознать слова на изображении.")
         return
-    text_1 = ' '.join(detected_words)
-    # corrected_words = []
-    # for idx, word in enumerate(detected_words):
-    #     corrected = correct_text(word)
-    #     corrected_words.append(corrected)
-    #     print(f"Слово {idx + 1} до коррекции: {word}, после коррекции: {corrected}")
-    # text_2 = ' '.join(corrected_words)
-    # with open("ans.txt") as f:
-    #     f.write(text_1)
-    print(text_1,"\n\n\n")
+    text = ' '.join(detected_words)
+    print(text,"\n\n\n")
     print("\nРаспознанные данные:")
-    print(extract_receipt_info(text_1))
+    text = extract_receipt_info(text)
+    inn_match = re.search(r"ИНН: (\d+)", text)
+    inn = inn_match.group(1) if inn_match else None
+    items = []
+    item_matches = re.findall(r"\d+\.\s(.+?)\s-\s([\d.]+)\s+x\s(\d+)\s=\s([\d.]+)", text)
+    for match in item_matches:
+        name, price_per_item, quantity, total_price = match
+        items.append({
+            "name": name.strip(),
+            "price_per_item": float(price_per_item),
+            "quantity": int(quantity),
+            "total_price": float(total_price),
+        })
 
-if __name__ == "__main__":
-    main()
+    total_match = re.search(r"Итоговая сумма:\s([\d.]+)", text)
+    total_sum = float(total_match.group(1)) if total_match else None
+
+    parsed_data = {
+        "INN": inn,
+        "items": items,
+        "total_sum": total_sum,
+    }
+    return parsed_data
+
+print(get_transcription("/home/dark/Documents/GitHub/Classification/1_1.jpg"))
