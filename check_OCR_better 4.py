@@ -175,7 +175,6 @@ def main():
         print(e)
         return
     
-    # Извлечение текста (строки -> слова)
     detected_words = extract_and_save_words(preprocessed_image)
     
     if not detected_words:
